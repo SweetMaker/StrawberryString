@@ -1,0 +1,19 @@
+# Ignore everything
+*
+
+# But do include these files
+!README.md
+!LICENSE
+!.gitignore
+!.c
+!.cpp
+!.h
+!Examples/LightCap/*.ino
+!Examples/LightCap/*.h
+!Examples/LightCap/*.cpp
+!Examples/MelodyCane/*.ino
+!Examples/MelodyCane/*.h
+!Examples/MelodyCane/*.cpp
+!Examples/PageTurner/*.ino
+!Examples/PageTurner/*.h
+!Examples/PageTurner/*.cpp

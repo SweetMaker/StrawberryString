@@ -51,6 +51,7 @@ bool diagnosticsOn;
 
 void processReadingBasic(void);
 void processReadingSpinner(void);
+void processWhiteLightning(void);
 
 
 void setup()
@@ -109,15 +110,9 @@ void loop()
 		case 'c':
 			myEventHandler(EVENT_CALLIBRATE, 0, 0);
 			break;
-    case 'r':
-      myEventHandler(EVENT_SET_ROT_OFF, 0, 0);
-      break;
     case 'p':
       myEventHandler(EVENT_PRINT_POSITION, 0, 0);
       break;
-		case 'z':
-			strStr.motionSensor.clearOffsetRotation();
-			break;
 		case 'd':
 			diagnosticsOn = true;
 			break;
@@ -144,12 +139,6 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
 		break;
 	}
 
-  case EVENT_SET_ROT_OFF: {
-    Serial.println("Set Rotation Offset");
-    strStr.configOffsetRotation();
-    break;
-  }
-
   case EVENT_PRINT_POSITION: {
     Serial.println("Print Position");
     int16_t roll = strStr.motionSensor.rotQuat.getSinRotX();
@@ -158,12 +147,14 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
     Serial.print(roll); Serial.print(" ");
     Serial.print(pitch); Serial.print(" ");
     Serial.print(yaw_16384); Serial.println();
+
+    strStr.motionSensor.rotQuatDelta.printQ();
+
     break;
   }
 
 	case TimerTickMngt::TIMER_TICK_S: 
-    myEventHandler(EVENT_PRINT_POSITION, 0, 0);
-	break;
+	  break;
 
 	case TimerTickMngt::TIMER_TICK_10S: // Generated once every ten seconds
 		break;
@@ -182,8 +173,9 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
 
 	case MotionSensor::MOTION_SENSOR_NEW_SMPL_RDY:
 	{
-//		processReadingBasic();
-		processReadingSpinner();
+    //		processReadingBasic();
+    //    processReadingSpinner();
+    processWhiteLightning();
 	}
 	break;
 
@@ -197,18 +189,11 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
 		break;
 
 	case TimerTickMngt::TIMER_TICK_100MS: // Generated ten times a second
-		if (diagnosticsOn) {
-			Serial.print(spinner.torque_512);
-			Serial.print("\t");
-			Serial.print(spinner.angularVel_100000);
-			Serial.print("\t");
-			Serial.print(spinner.rotation_100000);
-			Serial.print("\t");
-			Serial.print(myColourHSV[0].hue);
-			Serial.print("\t");
-
-			Serial.println();
-
+    if (diagnosticsOn) {
+      RotationQuaternion_16384* rq = &strStr.motionSensor.rotQuatDelta;
+      uint32_t ang_vel = (uint32_t)rq->x * (uint32_t)rq->x + (uint32_t)rq->y * (uint32_t)rq->y + (uint32_t)rq->z * (uint32_t)rq->z;
+      rq->printQ();
+      Serial.println(ang_vel);
 		}
 		break;
 	}
@@ -312,6 +297,27 @@ void processReadingSpinner(void)
 	hue = (uint8_t)(spinner.rotation_100000 / (int32_t)512);
 	applyHueSpread(hue, 2);
 }
+
+
+/*
+* processWhiteLightning: 
+*/
+void processWhiteLightning(void)
+{
+  RotationQuaternion_16384* rq = &strStr.motionSensor.rotQuatDelta;
+  uint32_t ang_vel = (uint32_t)rq->x * (uint32_t)rq->x + (uint32_t)rq->y * (uint32_t)rq->y + (uint32_t)rq->z * (uint32_t)rq->z;
+
+  ang_vel = 5 + (ang_vel >> 10);
+  uint8_t saturation = 100;
+
+  for (int i = 0; i < strStr.num_lights; i++) {
+    myColourHSV[i].hue = 128;
+    myColourHSV[i].saturation = saturation;
+    myColourHSV[i].value = (uint8_t)ang_vel;
+  }
+
+}
+
 
 
 void applyHueSpread(uint8_t _hue, uint8_t spread)
