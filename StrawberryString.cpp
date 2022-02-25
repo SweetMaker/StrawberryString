@@ -5,9 +5,6 @@ using namespace SweetMaker;
 #ifdef ARDUINO_ARCH_AVR
 const static uint8_t ms_scl = 19;    // A5+
 const static uint8_t ms_sda = 18;    // A4
-const static uint8_t ms_5v_pin = 17; // A3
-const static uint8_t ms_0v_pin = 16; // A2
-
 const static uint8_t ledStripSigPin = 11;
 #endif
 
@@ -25,10 +22,12 @@ StrawberryString::StrawberryString()
 	/*
 	 * 
 	 */
-	pinMode(ms_5v_pin, OUTPUT);
+#ifdef ARDUINO_ARCH_ESP32
+  pinMode(ms_5v_pin, OUTPUT);
 	digitalWrite(ms_5v_pin, HIGH);
 	pinMode(ms_0v_pin, OUTPUT);
 	digitalWrite(ms_0v_pin, LOW);
+#endif
 
 	userEventHandlerCallback = NULL;
 	userEventHandlerObject = NULL;
@@ -43,7 +42,6 @@ StrawberryString::StrawberryString()
 	ledStrip[2] = 0x7cfc00;
 	ledStrip[3] = 0xffd700;
 	ledStrip[4] = 0xf0f8ff;
-
 }
 
 int StrawberryString::init()
@@ -65,6 +63,7 @@ int StrawberryString::init()
 		while(motionSensor.init(&eeprom_data.ms_calibration) != 0)
 			// Try Again
 			;
+    motionSensor.setOffsetRotation(&eeprom_data.ms_offsetRotation);
 	}
 	else {
 		Serial.println("Resetting EEPROM Data");
@@ -96,7 +95,6 @@ void StrawberryString::configOffsetRotation()
 	RotationQuaternion_16384 invRot(&motionSensor.rotQuat);
 	invRot.conjugate();
 	configOffsetRotation(&invRot);
-
 }
 
 void StrawberryString::configOffsetRotation(RotationQuaternion_16384 *rotQuat)

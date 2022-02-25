@@ -23,6 +23,8 @@ Contact me at sweet.maker@outlook.com
 Release     Date                        Change Description
 --------|-------------|--------------------------------------------------------|
    1      06-Mar-2019   Initial release
+--------|-------------|--------------------------------------------------------|
+   2      24-Feb-2022   Updated initialisation to include rotation offset
 *******************************************************************************/
 
 
