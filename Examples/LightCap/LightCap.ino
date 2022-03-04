@@ -143,11 +143,11 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
 	case EVENT_CALLIBRATE:	{
     /*
      * A request to callibrate the StrawberryString Motion Sensor. Each individual MPU6050 motion sensor
-     * requires callibration. The StrawberryString stores the callibration values in EEPROM so 
-     * callibration is a one time task. 
+     * requires calibration. The StrawberryString stores the callibration values in EEPROM so 
+     * calibration is a one time task. 
      *
-     * When running Callibrating the motion sensor should be level and the MPU6050 chip topmost. Don't move
-     * the Strawberry String until callibration is complete .. about 10 seconds.
+     * When running Calibrating the motion sensor should be level and the MPU6050 chip topmost. Don't move
+     * the Strawberry String until calibration is complete .. about 10 seconds.
      */
 		Serial.println("Starting Self Cal");
 		strStr.recalibrateMotionSensor();

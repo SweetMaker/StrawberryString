@@ -80,16 +80,26 @@ namespace SweetMaker
 		void configEventHandlerCallback(EventHandler callbackFunction);
 		void configEventHandlerCallback(IEventHandler * callbackObject);
 
-		void configOffsetRotation();
-		void configOffsetRotation(RotationQuaternion_16384 *);
+    /*
+     * The MPU6050 mounting may not be level - this allows an
+     * offset to be applied to allow it be autoLeveled, and rotated about z
+     * or set to an arbitrary orientation as required. 
+     */
+    void configOffsetRotation();
+    void configOffsetRotation(float degrees_z);
+    void configOffsetRotation(RotationQuaternion_16384 *);
 
 		int init();
 		/*
-		* Call one of these frequently to allow FizzyMint to work properly
+		* Call one of these frequently to allow StrawberryString to work properly
 		*/
 		void update();
 		void updateDelay(uint16_t duration_ms); // wait for 'duration' milliseconds.
 
+    /*
+     * calibration is essential for the proper working of the MPU6050
+     * the result is stored in EEPROM and so this can be a one time task
+     */
 		int recalibrateMotionSensor();
 
 		int getEepromData(EEPROM_DATA * data);
@@ -100,7 +110,14 @@ namespace SweetMaker
 
 		static const uint8_t num_lights = 5;
 
+    /*
+     * the motionSensor - has it's own API for accessing readings
+     */
 		MotionSensor motionSensor;
+
+    /*
+     * The leds - an array of RGBs
+     */
 		ColourRGB ledStrip[num_lights];
 		ILedStripDriver * ledStripDriver;
 

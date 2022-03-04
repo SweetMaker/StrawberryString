@@ -1,3 +1,32 @@
+/*******************************************************************************
+  StrawberryString Implementation - takes a nano, an mpu6050 and some RGB leds
+                                    and makes some magic. Integrated with the SweetMaker framework. 
+
+  Copyright(C) 2017-2021  Howard James May
+
+  This file is part of the SweetMaker family of libraries
+
+  The SweetMaker SDK is free software: you can redistribute it and / or
+  modify it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  The SweetMaker SDK is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.If not, see <http://www.gnu.org/licenses/>.
+
+  Contact me at sweet.maker@outlook.com
+
+********************************************************************************
+  Release     Date                        Change Description
+--------|-------------|--------------------------------------------------------|
+   1      06-Mar-2019   Initial release
+   2      24-Feb-2022   Updated initialisation to include rotation offset
+*******************************************************************************/
 #include "StrawberryString.h"
 
 using namespace SweetMaker;
@@ -91,11 +120,28 @@ void StrawberryString::configEventHandlerCallback(IEventHandler * callbackObject
 
 void StrawberryString::configOffsetRotation()
 {
-	motionSensor.clearOffsetRotation();
-	RotationQuaternion_16384 invRot(&motionSensor.rotQuat);
-	invRot.conjugate();
-	configOffsetRotation(&invRot);
+  motionSensor.clearOffsetRotation();
+  RotationQuaternion_16384 offsetQ;
+  Quaternion_16384 gq;
+  motionSensor.rotQuat.getGravity(&gq);
+  offsetQ.findOffsetRotation(&gq);
+  configOffsetRotation(&offsetQ);
 }
+
+void StrawberryString::configOffsetRotation(float rotation_z)
+{
+  motionSensor.clearOffsetRotation();
+  RotationQuaternion_16384 offsetQ;
+  Quaternion_16384 gq;
+  motionSensor.rotQuat.getGravity(&gq);
+  offsetQ.findOffsetRotation(&gq);
+
+  RotationQuaternion_16384 rotZ(rotation_z, 0, 0, 16384);
+  offsetQ.crossProduct(&rotZ);
+
+  configOffsetRotation(&offsetQ);
+}
+
 
 void StrawberryString::configOffsetRotation(RotationQuaternion_16384 *rotQuat)
 {
