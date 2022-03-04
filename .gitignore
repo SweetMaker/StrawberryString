@@ -11,6 +11,9 @@
 !Examples/LightCap/*.ino
 !Examples/LightCap/*.h
 !Examples/LightCap/*.cpp
+!Examples/QuaternionTutorial/*.ino
+!Examples/QuaternionTutorial/*.h
+!Examples/QuaternionTutorial/*.cpp
 !Examples/MelodyCane/*.ino
 !Examples/MelodyCane/*.h
 !Examples/MelodyCane/*.cpp

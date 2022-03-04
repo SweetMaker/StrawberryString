@@ -122,9 +122,13 @@ void StrawberryString::configOffsetRotation()
 {
   motionSensor.clearOffsetRotation();
   RotationQuaternion_16384 offsetQ;
+
   Quaternion_16384 gq;
   motionSensor.rotQuat.getGravity(&gq);
-  offsetQ.findOffsetRotation(&gq);
+
+  Quaternion_16384 zAxis(0, 0, 0, 16384);
+  offsetQ.findOffsetRotation(&zAxis, &gq);
+
   configOffsetRotation(&offsetQ);
 }
 
@@ -132,9 +136,12 @@ void StrawberryString::configOffsetRotation(float rotation_z)
 {
   motionSensor.clearOffsetRotation();
   RotationQuaternion_16384 offsetQ;
+
   Quaternion_16384 gq;
   motionSensor.rotQuat.getGravity(&gq);
-  offsetQ.findOffsetRotation(&gq);
+
+  Quaternion_16384 zAxis(0, 0, 0, 16384);
+  offsetQ.findOffsetRotation(&zAxis, &gq);
 
   RotationQuaternion_16384 rotZ(rotation_z, 0, 0, 16384);
   offsetQ.crossProduct(&rotZ);
