@@ -1,7 +1,7 @@
  /*******************************************************************************
 StrawberryString.h Class for controlling a StrawberryString Device
 
-Copyright(C) 2019  Howard James May
+Copyright(C) 2019-2022  Howard James May
 
 This file is part of the SweetMaker project
 
@@ -126,7 +126,7 @@ namespace SweetMaker
 
 	private:
 		/*
-		* These class methods are only for use by FizzyMint itself
+		* These class methods are only for use by StrawberryString itself
 		*/
 		uint8_t hardwareVersion;
 
