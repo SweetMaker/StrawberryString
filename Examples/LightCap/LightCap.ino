@@ -314,10 +314,9 @@ void processMotionSensorReading(void)
 void handleSerialInput(void)
 {
   /*
-   * These are default offset rotations for the SweetMaker 
+   * Default offset rotation for the SweetMaker 
    */
-  static int ry = 62;  // rotation about Y axis
-  static int rz = -26; // rotation about X axis
+  static int rz = -26; // rotation about Z axis
 
   char c = Serial.read();
   switch (c) {
@@ -346,49 +345,23 @@ void handleSerialInput(void)
       diagnosticsOn = true;
     break;
 
-  case 'a':
-  {
-    /* Increment Rotation Offset about Y axis*/
-    ry++;
-    Serial.println(ry);
-    RotationQuaternion_16384 qy((float)ry, 0, 16384, 0);
-    RotationQuaternion_16384 qz((float)rz, 0, 0, 16384);
-    qy.crossProduct(&qz);
-    strStr.configOffsetRotation(&qy);
-    break;
-  }
-  case 'z':
-  {
-    /* Decrement Rotation Offset about Y axis*/
-    ry--;
-    Serial.println(ry);
-    RotationQuaternion_16384 qy((float)ry, 0, 16384, 0);
-    RotationQuaternion_16384 qz((float)rz, 0, 0, 16384);
-    qy.crossProduct(&qz);
-    strStr.configOffsetRotation(&qy);
-    break;
-  }
 
   case ',':
   {
-    /* Decrement Rotation Offset about Z axis*/
+    /* Decrement Rotation Offset about Z axis and auto-level*/
     rz--;
     Serial.println(rz);
-    RotationQuaternion_16384 qy((float)ry, 0, 16384, 0);
-    RotationQuaternion_16384 qz((float)rz, 0, 0, 16384);
-    qy.crossProduct(&qz);
-    strStr.configOffsetRotation(&qy);
+    strStr.configOffsetRotation(rz);
+    myEventHandler(EVENT_PRINT_POSITION, 0, 0);
     break;
   }
   case '.':
   {
-    /* Increment Rotation Offset about Z axis*/
+    /* Increment Rotation Offset about Z axis and auto-level*/
     rz++;
     Serial.println(rz);
-    RotationQuaternion_16384 qy((float)ry, 0, 16384, 0);
-    RotationQuaternion_16384 qz((float)rz, 0, 0, 16384);
-    qy.crossProduct(&qz);
-    strStr.configOffsetRotation(&qy);
+    strStr.configOffsetRotation(rz);
+    myEventHandler(EVENT_PRINT_POSITION, 0, 0);
     break;
   }
   }
