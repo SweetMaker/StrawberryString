@@ -9,6 +9,10 @@
 !.cpp
 !.h
 !Examples
+!Examples/SpiritLevel
+!Examples/SpiritLevel/*.ino
+!Examples/SpiritLevel/*.h
+!Examples/SpiritLevel/*.cpp
 !Examples/LightCap
 !Examples/LightCap/*.ino
 !Examples/LightCap/*.h

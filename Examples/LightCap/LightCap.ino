@@ -20,11 +20,9 @@ Contact me at sweet.maker@outlook.com
 
 *******************************************************************************/
 #include <Wire.h>
-#include <EEPROM.h>
 #include <SweetMaker.h>
 #include <MotionSensor.h>
 #include "StrawberryString.h"
-#include "EepromUtility.h"
 #include "SigLib.h"
 
 using namespace SweetMaker;
