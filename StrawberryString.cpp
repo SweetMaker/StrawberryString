@@ -39,6 +39,8 @@ using namespace SweetMaker;
 #ifdef ARDUINO_ARCH_AVR
 const static uint8_t ms_scl = 19;    // A5+
 const static uint8_t ms_sda = 18;    // A4
+const static uint8_t ms_5v_pin = 17; // A3
+const static uint8_t ms_0v_pin = 16; // A2
 
 const static uint8_t ledStripSigPin = 11;
 #endif
