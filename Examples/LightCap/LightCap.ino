@@ -72,7 +72,7 @@ void setup()
 	/* Start Serial at a speed (Baud rate) of 112500 Bytes per second */
 	Serial.begin(112500);
 
-  breatingSigGen.configSamples(breathingWave, NUM_SAM(breathingWave), 2000, 0); // period of 2000ms
+  breatingSigGen.configSamples(breathingWave, NUM_SAM(breathingWave), 1000, 0); // period of 1000ms
   breatingSigGen.start();  // start and repeat forever
 
 	strStr.configEventHandlerCallback(myEventHandler);
@@ -244,7 +244,7 @@ void processMotionSensorReading(void)
    * Get the tilt and scale
    */
   int16_t tilt_forward = strStr.motionSensor.rotQuat.getSinRotY();
-  tilt_forward = tilt_forward >> 8;
+  tilt_forward = tilt_forward >> 6;
 
   /*
    * Get the tilt_side, scale and take absolute value

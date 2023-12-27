@@ -443,15 +443,15 @@ void StrawberryString::printEepromData(EEPROM_DATA * data)
 	Serial.print("\t");
 	Serial.println(data->ms_calibration.gyroZoffset);
 
-	Serial.print("Motion Sensor Rotation Offset:\t");
-	Serial.print(data->ms_offsetRotation.r);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.x);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.y);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.z);
-	Serial.println("\t");
+		Serial.print("Motion Sensor Rotation Offset:\t");
+		Serial.print(data->ms_offsetRotation.r);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.x);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.y);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.z);
+		Serial.println("\t");
 }
 
 /*
