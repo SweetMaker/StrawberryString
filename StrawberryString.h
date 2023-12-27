@@ -1,7 +1,7 @@
  /*******************************************************************************
 StrawberryString.h Class for controlling a StrawberryString Device
 
-Copyright(C) 2019  Howard James May
+Copyright(C) 2019-2022  Howard James May
 
 This file is part of the SweetMaker project
 
@@ -23,6 +23,8 @@ Contact me at sweet.maker@outlook.com
 Release     Date                        Change Description
 --------|-------------|--------------------------------------------------------|
    1      06-Mar-2019   Initial release
+--------|-------------|--------------------------------------------------------|
+   2      24-Feb-2022   Updated initialisation to include rotation offset
 *******************************************************************************/
 
 
@@ -78,16 +80,26 @@ namespace SweetMaker
 		void configEventHandlerCallback(EventHandler callbackFunction);
 		void configEventHandlerCallback(IEventHandler * callbackObject);
 
-		void configOffsetRotation();
-		void configOffsetRotation(RotationQuaternion_16384 *);
+    /*
+     * The MPU6050 mounting may not be level - this allows an
+     * offset to be applied to allow it be autoLeveled, and rotated about z
+     * or set to an arbitrary orientation as required. 
+     */
+    void configOffsetRotation();
+    void configOffsetRotation(float degrees_z);
+    void configOffsetRotation(RotationQuaternion_16384 *);
 
 		int init();
 		/*
-		* Call one of these frequently to allow FizzyMint to work properly
+		* Call one of these frequently to allow StrawberryString to work properly
 		*/
 		void update();
 		void updateDelay(uint16_t duration_ms); // wait for 'duration' milliseconds.
 
+    /*
+     * calibration is essential for the proper working of the MPU6050
+     * the result is stored in EEPROM and so this can be a one time task
+     */
 		int recalibrateMotionSensor();
 
 		int getEepromData(EEPROM_DATA * data);
@@ -98,7 +110,14 @@ namespace SweetMaker
 
 		static const uint8_t num_lights = 5;
 
+    /*
+     * the motionSensor - has it's own API for accessing readings
+     */
 		MotionSensor motionSensor;
+
+    /*
+     * The leds - an array of RGBs
+     */
 		ColourRGB ledStrip[num_lights];
 		ILedStripDriver * ledStripDriver;
 
@@ -107,7 +126,7 @@ namespace SweetMaker
 
 	private:
 		/*
-		* These class methods are only for use by FizzyMint itself
+		* These class methods are only for use by StrawberryString itself
 		*/
 		uint8_t hardwareVersion;
 

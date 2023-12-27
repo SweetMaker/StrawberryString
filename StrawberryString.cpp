@@ -1,7 +1,41 @@
+/*******************************************************************************
+  StrawberryString Implementation - takes a Nano, an MPU6050 and some RGB leds
+                and makes some magic. Integrated with the SweetMaker framework. 
+
+  Copyright(C) 2017-2022  Howard James May
+
+  This file is part of the SweetMaker family of libraries
+
+  The SweetMaker SDK is free software: you can redistribute it and / or
+  modify it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  The SweetMaker SDK is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.If not, see <http://www.gnu.org/licenses/>.
+
+  Contact me at sweet.maker@outlook.com
+
+********************************************************************************
+  Release     Date                        Change Description
+--------|-------------|--------------------------------------------------------|
+   1      06-Mar-2019   Initial release
+   2      24-Feb-2022   Updated initialisation to include rotation offset
+*******************************************************************************/
+
 #include "StrawberryString.h"
 
 using namespace SweetMaker;
 
+/*
+ * On the Nano the led strip is mounted on three pins of the ICSP 
+ * socket. The MPU6050 is connected piggyback on the Nano.
+ */
 #ifdef ARDUINO_ARCH_AVR
 const static uint8_t ms_scl = 19;    // A5+
 const static uint8_t ms_sda = 18;    // A4
@@ -20,51 +54,77 @@ const static uint8_t ms_0v_pin = 16; // A2
 const static uint8_t ledStripSigPin = 27;
 #endif
 
+/*
+ * StrawberryString instantiation
+ */
 StrawberryString::StrawberryString()
 {
 	/*
-	 * 
+	 * Set Digital Pin output for powering the MPU6050 on the ESP32
 	 */
-	pinMode(ms_5v_pin, OUTPUT);
+#ifdef ARDUINO_ARCH_ESP32
+  pinMode(ms_5v_pin, OUTPUT);
 	digitalWrite(ms_5v_pin, HIGH);
 	pinMode(ms_0v_pin, OUTPUT);
 	digitalWrite(ms_0v_pin, LOW);
+#endif
 
+  /*
+   * SweetMaker user event handlers
+   */
 	userEventHandlerCallback = NULL;
 	userEventHandlerObject = NULL;
 
+  /*
+   * Register this StrawberryString as eventHandler for
+   * SweetMaker events - at present StrawberryString does 
+   * nothing with these events other than forward to the user
+   */
 	EventMngr::getMngr()->configCallBack(this);
 
+  /*
+   * Configure LED string signal pin.
+   */
 	pinMode(ledStripSigPin, OUTPUT);
 	digitalWrite(ledStripSigPin, LOW);
 
+  /*
+   * Set some initial values for good measure
+   */
 	ledStrip[0] = 0x00BFFF;
 	ledStrip[1] = 0xff1493;
 	ledStrip[2] = 0x7cfc00;
 	ledStrip[3] = 0xffd700;
 	ledStrip[4] = 0xf0f8ff;
-
 }
 
+/*
+ * init - following instantiation this function performs additional setup.
+ *        In particular this includes recovering MotionSensor calibration and
+ *        rotation offset values from EEPROM. This avoids trying to manage 
+ *        deployment specific values in code.
+ */
 int StrawberryString::init()
 {
-	EEPROM_DATA eeprom_data;
-
+  /*
+   * Create a LED strip driver dependent on Arduino architecture
+   */
 #ifdef ARDUINO_ARCH_AVR
 	ledStripDriver = new AVRLedStripDriver(ledStripSigPin);
 #elif ARDUINO_ARCH_ESP32
 	ledStripDriver = new Esp32LedStripDriver(ledStripSigPin, 5);
 #endif
 
-	motionSensor.configEventHandler(this);
 	/*
-	* Read Eeprom Config
+	* Read EEPROM Config then initialise motionSensor
 	*/
-	if (this->getEepromData(&eeprom_data) == 0)	{
+  EEPROM_DATA eeprom_data;
+  if (this->getEepromData(&eeprom_data) == 0)	{
 		printEepromData(&eeprom_data);
-		while(motionSensor.init(&eeprom_data.ms_calibration) != 0)
+    while (motionSensor.init(&eeprom_data.ms_calibration) != 0)
 			// Try Again
 			;
+    motionSensor.setOffsetRotation(&eeprom_data.ms_offsetRotation);
 	}
 	else {
 		Serial.println("Resetting EEPROM Data");
@@ -74,31 +134,97 @@ int StrawberryString::init()
 			;
 	}
 
+  /*
+   * The TimerTickMngt needs a kick to make it start.
+   */
 	TimerTickMngt::getTimerMngt()->update(0);
 	
+  /*
+   * Record the current time
+   */
 	this->lastUpdateTime_ms = millis();
 	return(0);
 }
 
+/*
+ * configEventHandlerCallback - user registers a callback function for handling
+ *                              SweetMaker events;
+ */
 void StrawberryString::configEventHandlerCallback(EventHandler callbackFunction)
 {
 	this->userEventHandlerCallback = callbackFunction;
 }
 
+/*
+ * configEventHandlerCallback - user registers a callback object for handling
+ *                              SweetMaker events;
+ */
 void StrawberryString::configEventHandlerCallback(IEventHandler * callbackObject)
 {
 	this->userEventHandlerObject = callbackObject;
 }
 
-void StrawberryString::configOffsetRotation()
+/*
+ * Calibrate Motion Sensor and stores values in EEPROM. Motion Sensor should remain
+ * stationary and horizontal (Z facing upwards) until complete.
+ *
+ * The calibration values will be automatically retrieved and applied next time.
+ */
+int StrawberryString::recalibrateMotionSensor()
 {
-	motionSensor.clearOffsetRotation();
-	RotationQuaternion_16384 invRot(&motionSensor.rotQuat);
-	invRot.conjugate();
-	configOffsetRotation(&invRot);
+  EEPROM_DATA eeprom_data;
+  getEepromData(&eeprom_data);
+  printEepromData(&eeprom_data);
 
+  motionSensor.runSelfCalibrate(&eeprom_data.ms_calibration);
+
+  printEepromData(&eeprom_data);
+  setEepromData(&eeprom_data);
+  return (0);
 }
 
+
+/*
+ * configOffsetRotation - this autoLevels the MPU6050 and stores the offset in EEPROM
+ */
+void StrawberryString::configOffsetRotation()
+{
+  motionSensor.clearOffsetRotation();
+  RotationQuaternion_16384 offsetQ;
+
+  Quaternion_16384 gq;
+  motionSensor.rotQuat.getGravity(&gq);
+
+  Quaternion_16384 zAxis(0, 0, 0, 16384);
+  offsetQ.findOffsetRotation(&zAxis, &gq);
+
+  configOffsetRotation(&offsetQ);
+}
+
+/*
+ * configOffsetRotation - this autolevels the MPU6050 and also applies a rotation
+ *                        about the Z axis as offset. Stores in EEPROM.
+ */
+void StrawberryString::configOffsetRotation(float rotation_z)
+{
+  motionSensor.clearOffsetRotation();
+  RotationQuaternion_16384 offsetQ;
+
+  Quaternion_16384 gq;
+  motionSensor.rotQuat.getGravity(&gq);
+
+  Quaternion_16384 zAxis(0, 0, 0, 16384);
+  offsetQ.findOffsetRotation(&zAxis, &gq);
+
+  RotationQuaternion_16384 rotZ(rotation_z, 0, 0, 16384);
+  offsetQ.crossProduct(&rotZ);
+
+  configOffsetRotation(&offsetQ);
+}
+
+/*
+ * configOffsetRotation - Applies an arbitrary offset rotation. Stores in EEPROM
+ */
 void StrawberryString::configOffsetRotation(RotationQuaternion_16384 *rotQuat)
 {
 	int retVal;
@@ -124,6 +250,14 @@ void StrawberryString::configOffsetRotation(RotationQuaternion_16384 *rotQuat)
 	motionSensor.setOffsetRotation(rotQuat);
 }
 
+/*
+ * Called by user in main loop(). This calculates
+ * elapsed time and calls the SweetMaker framework 
+ * update function.
+ *
+ * Also updates the LED strip being careful to disable interrupts
+ * as it does so.
+ */
 void StrawberryString::update()
 {
 	unsigned long thisTime_ms = millis();
@@ -138,6 +272,13 @@ void StrawberryString::update()
 	lastUpdateTime_ms = thisTime_ms;
 }
 
+/*
+ * updateDelay - similar to update but promises not to return for
+ *               a period of time in milliseconds. This is 
+ *               like a blocking function and allows synchronous 
+ *               coding. Note: event callbacks will continue to 
+ *               occur from the SweetMaker framework to the user.
+ */
 void StrawberryString::updateDelay(uint16_t duration_ms)
 {
 	unsigned long finishTime_ms = millis() + duration_ms;
@@ -146,6 +287,9 @@ void StrawberryString::updateDelay(uint16_t duration_ms)
 		this->update();
 }
 
+/*
+ * handleEvent - receives events from the SweetMaker framework and forwards them to the User
+ */
 void StrawberryString::handleEvent(uint16_t eventId, uint8_t sourceInst, uint16_t eventInfo)
 {
 	if (userEventHandlerCallback)
@@ -155,7 +299,9 @@ void StrawberryString::handleEvent(uint16_t eventId, uint8_t sourceInst, uint16_
 		userEventHandlerObject->handleEvent(eventId, sourceInst, eventInfo);
 }
 
-
+/*
+ * Reads EEPROM data and validates CRC. 
+ */
 int StrawberryString::getEepromData(EEPROM_DATA * data)
 {
 	uint16_t storedCrc;
@@ -191,7 +337,9 @@ int StrawberryString::getEepromData(EEPROM_DATA * data)
 	return (0);
 }
 
-
+/*
+ * Sets EEPROM data
+ */
 int StrawberryString::setEepromData(EEPROM_DATA * data)
 {
 	uint16_t crc_value;
@@ -236,7 +384,9 @@ int StrawberryString::setEepromData(EEPROM_DATA * data)
 	return 0;
 }
 
-
+/*
+ * Resets EEPROM data
+ */
 int StrawberryString::resetEepromData()
 {
 	int retVal;
@@ -270,21 +420,9 @@ int StrawberryString::resetEepromData()
 	return (retVal);
 }
 
-
-int StrawberryString::recalibrateMotionSensor()
-{
-	EEPROM_DATA eeprom_data;
-	getEepromData(&eeprom_data);
-	printEepromData(&eeprom_data);
-
-	motionSensor.runSelfCalibrate(&eeprom_data.ms_calibration);
-
-	printEepromData(&eeprom_data);
-	setEepromData(&eeprom_data);
-	return (0);
-}
-
-
+/*
+ * Prints EEPROM data
+ */
 void StrawberryString::printEepromData(EEPROM_DATA * data)
 {
 //	Serial.print("Hardware Version:\t");
@@ -307,18 +445,20 @@ void StrawberryString::printEepromData(EEPROM_DATA * data)
 	Serial.print("\t");
 	Serial.println(data->ms_calibration.gyroZoffset);
 
-	Serial.print("Motion Sensor Rotation Offset:\t");
-	Serial.print(data->ms_offsetRotation.r);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.x);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.y);
-	Serial.print("\t");
-	Serial.print(data->ms_offsetRotation.z);
-	Serial.println("\t");
+		Serial.print("Motion Sensor Rotation Offset:\t");
+		Serial.print(data->ms_offsetRotation.r);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.x);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.y);
+		Serial.print("\t");
+		Serial.print(data->ms_offsetRotation.z);
+		Serial.println("\t");
 }
 
-
+/*
+ * Retrieves and Prints EEPROM Data
+ */
 void StrawberryString::printEepromData()
 {
 	EEPROM_DATA data;
