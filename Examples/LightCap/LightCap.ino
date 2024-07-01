@@ -158,14 +158,14 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
      * Print out the current position / orientation
      */
     Serial.println("Print Position");
-    int16_t roll = strStr.motionSensor.rotQuat.getSinRotX();
-    int16_t pitch = strStr.motionSensor.rotQuat.getSinRotY();
-    int16_t yaw_16384 = strStr.motionSensor.rotQuat.getSinRotZ();
+    int16_t roll = strStr.motionSensor.rotQuat_rm.getSinRotX();
+    int16_t pitch = strStr.motionSensor.rotQuat_rm.getSinRotY();
+    int16_t yaw_16384 = strStr.motionSensor.rotQuat_rm.getSinRotZ();
     
     Serial.print(roll); Serial.print(" ");
     Serial.print(pitch); Serial.print(" ");
     Serial.print(yaw_16384); Serial.println();
-    strStr.motionSensor.rotQuat.printQ();
+    strStr.motionSensor.rotQuat_rm.printQ();
 
     break;
   }
@@ -202,6 +202,15 @@ void myEventHandler(uint16_t eventId, uint8_t eventRef, uint16_t eventInfo)
     processMotionSensorReading();
     break;
 
+    case ILedStripDriver::LSE_CONFIG_ERR:
+        Serial.println("Light Strip config error");
+        break;
+
+    case ILedStripDriver::LSE_SHOW_ERR:
+        Serial.println("Light Strip show error");
+        break;
+
+        
 
     /*
      * Other events which we aren't using
@@ -243,13 +252,13 @@ void processMotionSensorReading(void)
   /*
    * Get the tilt and scale
    */
-  int16_t tilt_forward = strStr.motionSensor.rotQuat.getSinRotY();
+  int16_t tilt_forward = strStr.motionSensor.rotQuat_rm.getSinRotY();
   tilt_forward = tilt_forward >> 6;
 
   /*
    * Get the tilt_side, scale and take absolute value
    */
-  int16_t tilt_side = strStr.motionSensor.rotQuat.getSinRotX();
+  int16_t tilt_side = strStr.motionSensor.rotQuat_rm.getSinRotX();
   tilt_side = tilt_side >> 8;
   tilt_side = abs(tilt_side);
 
@@ -344,23 +353,5 @@ void handleSerialInput(void)
     break;
 
 
-  case ',':
-  {
-    /* Decrement Rotation Offset about Z axis and auto-level*/
-    rz--;
-    Serial.println(rz);
-    strStr.configOffsetRotation(rz);
-    myEventHandler(EVENT_PRINT_POSITION, 0, 0);
-    break;
-  }
-  case '.':
-  {
-    /* Increment Rotation Offset about Z axis and auto-level*/
-    rz++;
-    Serial.println(rz);
-    strStr.configOffsetRotation(rz);
-    myEventHandler(EVENT_PRINT_POSITION, 0, 0);
-    break;
-  }
   }
 }

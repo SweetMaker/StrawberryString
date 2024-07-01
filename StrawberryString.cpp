@@ -27,8 +27,10 @@
    1      06-Mar-2019   Initial release
    2      24-Feb-2022   Updated initialisation to include rotation offset
 *******************************************************************************/
-
+#include <stdint.h>
+#include <string.h>
 #include "StrawberryString.h"
+#include "StaticData.h"
 
 using namespace SweetMaker;
 
@@ -43,8 +45,15 @@ const static uint8_t ms_5v_pin = 17; // A3
 const static uint8_t ms_0v_pin = 16; // A2
 
 const static uint8_t ledStripSigPin = 11;
-#endif
+#else 
+#ifdef ARDUINO_ESP32C3_DEV
+const static uint8_t ms_scl = 9;
+const static uint8_t ms_sda = 10;
+const static uint8_t ms_5v_pin = 6;
+const static uint8_t ms_0v_pin = 7;
 
+const static uint8_t ledStripSigPin = 4;
+#else
 #ifdef ARDUINO_ARCH_ESP32
 const static uint8_t ms_scl = 21;    // A5+
 const static uint8_t ms_sda = 22;    // A4
@@ -52,6 +61,8 @@ const static uint8_t ms_5v_pin = 17; // A3
 const static uint8_t ms_0v_pin = 16; // A2
 
 const static uint8_t ledStripSigPin = 27;
+#endif
+#endif
 #endif
 
 /*
@@ -63,7 +74,7 @@ StrawberryString::StrawberryString()
 	 * Set Digital Pin output for powering the MPU6050 on the ESP32
 	 */
 #ifdef ARDUINO_ARCH_ESP32
-  pinMode(ms_5v_pin, OUTPUT);
+    pinMode(ms_5v_pin, OUTPUT);
 	digitalWrite(ms_5v_pin, HIGH);
 	pinMode(ms_0v_pin, OUTPUT);
 	digitalWrite(ms_0v_pin, LOW);
@@ -88,14 +99,6 @@ StrawberryString::StrawberryString()
 	pinMode(ledStripSigPin, OUTPUT);
 	digitalWrite(ledStripSigPin, LOW);
 
-  /*
-   * Set some initial values for good measure
-   */
-	ledStrip[0] = 0x00BFFF;
-	ledStrip[1] = 0xff1493;
-	ledStrip[2] = 0x7cfc00;
-	ledStrip[3] = 0xffd700;
-	ledStrip[4] = 0xf0f8ff;
 }
 
 /*
@@ -116,25 +119,43 @@ int StrawberryString::init()
 #endif
 
 	/*
-	* Read EEPROM Config then initialise motionSensor
+	* Start the Motion Sensor - this picks up default calibration values
 	*/
-  EEPROM_DATA eeprom_data;
-  if (this->getEepromData(&eeprom_data) == 0)	{
-		printEepromData(&eeprom_data);
-    while (motionSensor.init(&eeprom_data.ms_calibration) != 0)
-			// Try Again
-			;
-    motionSensor.setOffsetRotation(&eeprom_data.ms_offsetRotation);
-	}
-	else {
-		Serial.println("Resetting EEPROM Data");
-		resetEepromData();
-		while (motionSensor.init() != 0)
-			// Try Again
-			;
+	while (motionSensor.init() != 0) {
+		Serial.println("Retrying motionSensor.init");
 	}
 
-  /*
+	/*
+	* Read EEPROM Config then initialise motionSensor
+	*/
+	STATIC_DATA static_data;
+	if (this->getStaticData(&static_data) == 0) {
+		printStaticData(&static_data);
+	}
+	else {
+		Serial.println("Resetting Static Data");
+		resetStaticData();
+		if (this->getStaticData(&static_data) == 0) {
+			Serial.println("Failed to read Static Data following resetStaticData.");
+		}
+	}
+	motionSensor.setCalibration(&static_data.ms_calibration);
+	motionSensor.motionProcessor.setLevelOffset(&static_data.ms_offsetRotation);
+	this->num_lights = static_data.numLights;
+	this->ledStrip = (ColourRGB *)malloc(sizeof(ColourRGB) * num_lights);
+
+	if (num_lights >= 5) {
+		/*
+		 * Set some initial values for good measure
+		 */
+		ledStrip[0] = 0x00BFFF;
+		ledStrip[1] = 0xff1493;
+		ledStrip[2] = 0x7cfc00;
+		ledStrip[3] = 0xffd700;
+		ledStrip[4] = 0xf0f8ff;
+	}
+
+	/*
    * The TimerTickMngt needs a kick to make it start.
    */
 	TimerTickMngt::getTimerMngt()->update(0);
@@ -172,82 +193,53 @@ void StrawberryString::configEventHandlerCallback(IEventHandler * callbackObject
  */
 int StrawberryString::recalibrateMotionSensor()
 {
-  EEPROM_DATA eeprom_data;
-  getEepromData(&eeprom_data);
-  printEepromData(&eeprom_data);
+  STATIC_DATA static_data;
+  getStaticData(&static_data);
+  printStaticData(&static_data);
 
-  motionSensor.runSelfCalibrate(&eeprom_data.ms_calibration);
+  motionSensor.runOffsetSelfCalibrate(&static_data.ms_calibration);
 
-  printEepromData(&eeprom_data);
-  setEepromData(&eeprom_data);
+  printStaticData(&static_data);
+  setStaticData(&static_data);
   return (0);
 }
 
 
 /*
- * configOffsetRotation - this autoLevels the MPU6050 and stores the offset in EEPROM
+ * autoLevelAndStore - this autoLevels the MPU6050 and stores the offset in EEPROM
  */
-void StrawberryString::configOffsetRotation()
+void StrawberryString::autoLevelAndStore()
 {
-  motionSensor.clearOffsetRotation();
-  RotationQuaternion_16384 offsetQ;
-
-  Quaternion_16384 gq;
-  motionSensor.rotQuat.getGravity(&gq);
-
-  Quaternion_16384 zAxis(0, 0, 0, 16384);
-  offsetQ.findOffsetRotation(&zAxis, &gq);
-
-  configOffsetRotation(&offsetQ);
+	RotationQuaternion_16384 offset_sm_xy;
+	offset_sm_xy = this->motionSensor.motionProcessor.autoLevel();
+	storeOffsetRotation(&offset_sm_xy);
 }
 
-/*
- * configOffsetRotation - this autolevels the MPU6050 and also applies a rotation
- *                        about the Z axis as offset. Stores in EEPROM.
- */
-void StrawberryString::configOffsetRotation(float rotation_z)
-{
-  motionSensor.clearOffsetRotation();
-  RotationQuaternion_16384 offsetQ;
-
-  Quaternion_16384 gq;
-  motionSensor.rotQuat.getGravity(&gq);
-
-  Quaternion_16384 zAxis(0, 0, 0, 16384);
-  offsetQ.findOffsetRotation(&zAxis, &gq);
-
-  RotationQuaternion_16384 rotZ(rotation_z, 0, 0, 16384);
-  offsetQ.crossProduct(&rotZ);
-
-  configOffsetRotation(&offsetQ);
-}
 
 /*
  * configOffsetRotation - Applies an arbitrary offset rotation. Stores in EEPROM
  */
-void StrawberryString::configOffsetRotation(RotationQuaternion_16384 *rotQuat)
+void StrawberryString::storeOffsetRotation(RotationQuaternion_16384 *rotQuat)
 {
 	int retVal;
-	EEPROM_DATA data;
+	STATIC_DATA data;
 
-	retVal = getEepromData(&data);
+	retVal = getStaticData(&data);
 	if (retVal != 0) {
-		Serial.println("Resetting EEPROM");
-		resetEepromData();
-		getEepromData(&data);
+		Serial.println("Resetting Static Data");
+		resetStaticData();
+		getStaticData(&data);
 	}
 
-	printEepromData(&data);
+	printStaticData(&data);
 
 	data.ms_offsetRotation.r = rotQuat->r;
 	data.ms_offsetRotation.x = rotQuat->x;
 	data.ms_offsetRotation.y = rotQuat->y;
 	data.ms_offsetRotation.z = rotQuat->z;
 
-	printEepromData(&data);
-	setEepromData(&data);
-
-	motionSensor.setOffsetRotation(rotQuat);
+	printStaticData(&data);
+	setStaticData(&data);
 }
 
 /*
@@ -302,101 +294,37 @@ void StrawberryString::handleEvent(uint16_t eventId, uint8_t sourceInst, uint16_
 /*
  * Reads EEPROM data and validates CRC. 
  */
-int StrawberryString::getEepromData(EEPROM_DATA * data)
+int StrawberryString::getStaticData(STATIC_DATA * data)
 {
-	uint16_t storedCrc;
-	uint16_t calculatedCrc;
-	EepromUtility::EepromReader eepromReader(eeprom_data_offset, eeprom_data_length);
-	/* Calculate and check CRC */
-	calculatedCrc = EepromUtility::calculateCrc(StrawberryString::eeprom_data_offset, StrawberryString::eeprom_data_length - 2);
-
-	data->lightStringType = eepromReader.readU8();
-
-	data->ms_offsetRotation.r = eepromReader.readS16();
-	data->ms_offsetRotation.x = eepromReader.readS16();
-	data->ms_offsetRotation.y = eepromReader.readS16();
-	data->ms_offsetRotation.z = eepromReader.readS16();
-
-	data->ms_calibration.accelXoffset = eepromReader.readS16();
-	data->ms_calibration.accelYoffset = eepromReader.readS16();
-	data->ms_calibration.accelZoffset = eepromReader.readS16();
-	data->ms_calibration.gyroXoffset = eepromReader.readS16();
-	data->ms_calibration.gyroYoffset = eepromReader.readS16();
-	data->ms_calibration.gyroZoffset = eepromReader.readS16();
-
-	data->hardwareVersion = eepromReader.readU8();
-	data->softwareVersion = eepromReader.readU8();
-	data->serialNumber = eepromReader.readU32();
-
-	storedCrc = eepromReader.readU16();
-	Serial.print("Recovered CRC:");
-	Serial.println(storedCrc);
-
-	if (storedCrc != calculatedCrc)
-		return (-1);
-	return (0);
+	return _getStaticData(data);
 }
 
 /*
- * Sets EEPROM data
+ * Sets EEPROM data - always sets V2
  */
-int StrawberryString::setEepromData(EEPROM_DATA * data)
+int StrawberryString::setStaticData(STATIC_DATA * data)
 {
-	uint16_t crc_value;
-	EepromUtility::EepromWriter eepromWriter(StrawberryString::eeprom_data_offset, eeprom_data_length);
-
-	/*
-	 * LED String Type
-	 */
-	eepromWriter.writeU8(1);
-
-	/*
-	 * Motion Sensor Rotation Offset
-	 */
-	eepromWriter.writeS16(data->ms_offsetRotation.r);
-	eepromWriter.writeS16(data->ms_offsetRotation.x);
-	eepromWriter.writeS16(data->ms_offsetRotation.y);
-	eepromWriter.writeS16(data->ms_offsetRotation.z);
-
-	/*
-	 * Motion Sensor Calibration
-	 */
-	eepromWriter.writeS16(data->ms_calibration.accelXoffset);
-	eepromWriter.writeS16(data->ms_calibration.accelYoffset);
-	eepromWriter.writeS16(data->ms_calibration.accelZoffset);
-
-	eepromWriter.writeS16(data->ms_calibration.gyroXoffset);
-	eepromWriter.writeS16(data->ms_calibration.gyroYoffset);
-	eepromWriter.writeS16(data->ms_calibration.gyroZoffset);
-
-	/*
-	 * Hardware and Software and Serial Number!
-	 */
-	eepromWriter.writeU8(data->hardwareVersion);
-	eepromWriter.writeU8(data->softwareVersion);
-	eepromWriter.writeU32(data->serialNumber);
-
-	/*
-	 * CRC value
-	 */
-	crc_value = EepromUtility::calculateCrc(StrawberryString::eeprom_data_offset, StrawberryString::eeprom_data_length - 2);
-	eepromWriter.writeU16(crc_value);
-	return 0;
+	return _setStaticData(data);
 }
 
 /*
  * Resets EEPROM data
  */
-int StrawberryString::resetEepromData()
+int StrawberryString::resetStaticData()
 {
 	int retVal;
-	EEPROM_DATA data;
-	memset(&data, 0, sizeof(EEPROM_DATA));
+	STATIC_DATA data;
+	memset(&data, 0, sizeof(STATIC_DATA));
 	data.hardwareVersion = 1;
 	data.softwareVersion = 1;
-	data.lightStringType = 1;
 	data.serialNumber = 1;
-	
+
+	memset(data.instanceName, 0, MAX_INSTANCE_NAME_LEN);
+	strcpy(data.instanceName, "SweetMaker-StrawberryString");
+
+	data.lightStringType = 1;
+	data.numLights = DEFAULT_NUM_LIGHTS;
+
 	/*
 	 * MS calibration 
 	 */
@@ -406,6 +334,9 @@ int StrawberryString::resetEepromData()
 	data.ms_calibration.gyroXoffset = 0;
 	data.ms_calibration.gyroYoffset = 0;
 	data.ms_calibration.gyroZoffset = 0;
+	data.ms_calibration.accelXFineGain = MotionSensor::GAIN_UNDEFINED;
+	data.ms_calibration.accelYFineGain = MotionSensor::GAIN_UNDEFINED;
+	data.ms_calibration.accelZFineGain = MotionSensor::GAIN_UNDEFINED;
 
 	/*
 	 * Rotation of zero
@@ -416,21 +347,25 @@ int StrawberryString::resetEepromData()
 	data.ms_offsetRotation.z = 1;
 	data.ms_offsetRotation.normalize();
 
-	retVal = setEepromData(&data);
+	retVal = setStaticData(&data);
 	return (retVal);
 }
 
 /*
  * Prints EEPROM data
  */
-void StrawberryString::printEepromData(EEPROM_DATA * data)
+void StrawberryString::printStaticData(STATIC_DATA* data)
 {
-//	Serial.print("Hardware Version:\t");
-//	Serial.println(data->hardwareVersion);
-//	Serial.print("Software Version:\t");
-//	Serial.println(data->softwareVersion);
-//	Serial.print(data->lightStringType);
-//	Serial.print(data->serialNumber);
+	Serial.print("Hardware Version:\t");
+	Serial.println(data->hardwareVersion);
+	Serial.print("Software Version:\t");
+	Serial.println(data->softwareVersion);
+	Serial.print(data->lightStringType);
+	Serial.print("Num Lights: \t");
+	Serial.println(data->numLights);
+
+	Serial.print(data->serialNumber);
+	Serial.println(data->instanceName);
 
 	Serial.print("Motion Sensor Calibration:\t");
 	Serial.print(data->ms_calibration.accelXoffset);
@@ -443,27 +378,33 @@ void StrawberryString::printEepromData(EEPROM_DATA * data)
 	Serial.print("\t");
 	Serial.print(data->ms_calibration.gyroYoffset);
 	Serial.print("\t");
-	Serial.println(data->ms_calibration.gyroZoffset);
+	Serial.print(data->ms_calibration.gyroZoffset);
+	Serial.print("\t");
+	Serial.print(data->ms_calibration.accelXFineGain);
+	Serial.print("\t");
+	Serial.print(data->ms_calibration.accelYFineGain);
+	Serial.print("\t");
+	Serial.println(data->ms_calibration.accelZFineGain);
 
-		Serial.print("Motion Sensor Rotation Offset:\t");
-		Serial.print(data->ms_offsetRotation.r);
-		Serial.print("\t");
-		Serial.print(data->ms_offsetRotation.x);
-		Serial.print("\t");
-		Serial.print(data->ms_offsetRotation.y);
-		Serial.print("\t");
-		Serial.print(data->ms_offsetRotation.z);
-		Serial.println("\t");
+	Serial.print("Motion Sensor Rotation Offset:\t");
+	Serial.print(data->ms_offsetRotation.r);
+	Serial.print("\t");
+	Serial.print(data->ms_offsetRotation.x);
+	Serial.print("\t");
+	Serial.print(data->ms_offsetRotation.y);
+	Serial.print("\t");
+	Serial.print(data->ms_offsetRotation.z);
+	Serial.println("\t");
 }
 
 /*
- * Retrieves and Prints EEPROM Data
+ * Retrieves and Prints Static Data
  */
-void StrawberryString::printEepromData()
+void StrawberryString::printStaticData()
 {
-	EEPROM_DATA data;
-	getEepromData(&data);
-	printEepromData(&data);
+	STATIC_DATA data;
+	getStaticData(&data);
+	printStaticData(&data);
 }
 
 
