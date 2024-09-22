@@ -1,15 +1,15 @@
-# Ignore everything
-*
+# VS Code Artifacts
+*vcxproj.filters
+*vcxproj.user
+*.suo
+*.VC.db
+*.ipch
+*.vs
+# May want to include these VS Project artifacts at a later date
+*.sln
+*.vcxproj
+Release
+__*
 
-# But do include these files
-!README.md
-!LICENSE
-!.gitignore
-!.c
-!.cpp
-!.h
-!Examples
-!Examples/*
-!Examples/*/*.ino
-!Examples/*/*.h
-!Examples/*/*.cpp
+#Miscellaneous
+*.bak

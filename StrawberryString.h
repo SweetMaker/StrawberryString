@@ -32,7 +32,7 @@ Release     Date                        Change Description
 #define __STRAWBERRY_STRING_H__
 
 #include <Arduino.h>
-#include <EEPROM.h>
+#include "EEPROM.h"
 
 #include <Wire.h>
 
@@ -65,31 +65,36 @@ namespace SweetMaker
 		/*
 		* StrawberryString uses a part of the EEPROM memory located at the end of the address space.
 		*/
-		static const uint16_t eeprom_data_length = 29;
-		static const uint16_t eeprom_data_offset = 0x400 - eeprom_data_length;
+		static const uint8_t MAX_INSTANCE_NAME_LEN = 64;
+		static const uint8_t DEFAULT_NUM_LIGHTS = 5;
 
-		typedef struct eepromData {
+		typedef struct staticData {
 			uint8_t hardwareVersion;
 			uint8_t softwareVersion;
 			uint32_t serialNumber;
+
+			char instanceName[MAX_INSTANCE_NAME_LEN];
+			
 			uint8_t lightStringType;
+			uint8_t numLights;
+
 			RotationQuaternion_16384 ms_offsetRotation;
 			MotionSensor::CALIBRATION ms_calibration;
-		}EEPROM_DATA;
+		}STATIC_DATA;
 
 		void configEventHandlerCallback(EventHandler callbackFunction);
 		void configEventHandlerCallback(IEventHandler * callbackObject);
 
     /*
-     * The MPU6050 mounting may not be level - this allows an
-     * offset to be applied to allow it be autoLeveled, and rotated about z
-     * or set to an arbitrary orientation as required. 
+     * The MPU6050 mounting may not be level - this provides an offset to make 
+	 * the sensor appear as if it is currently flat. This is stored in EEPROM and reused 
+	 * on startup 
+	 * 
+	 * Note: no offset for rotation about vertical is made.
      */
-    void configOffsetRotation();
-    void configOffsetRotation(float degrees_z);
-    void configOffsetRotation(RotationQuaternion_16384 *);
+    void autoLevelAndStore();
 
-		int init();
+	int init();
 		/*
 		* Call one of these frequently to allow StrawberryString to work properly
 		*/
@@ -102,13 +107,14 @@ namespace SweetMaker
      */
 		int recalibrateMotionSensor();
 
-		int getEepromData(EEPROM_DATA * data);
-		int setEepromData(EEPROM_DATA * data);
+		int getStaticData(STATIC_DATA * data);
+		int setStaticData(STATIC_DATA * data);
+		int resetStaticData();
 
-		void printEepromData(EEPROM_DATA * data);
-		void printEepromData();
+		void printStaticData(STATIC_DATA * data);
+		void printStaticData();
 
-		static const uint8_t num_lights = 5;
+		uint8_t num_lights = DEFAULT_NUM_LIGHTS;
 
     /*
      * the motionSensor - has it's own API for accessing readings
@@ -118,13 +124,14 @@ namespace SweetMaker
     /*
      * The leds - an array of RGBs
      */
-		ColourRGB ledStrip[num_lights];
+		ColourRGB * ledStrip;
 		ILedStripDriver * ledStripDriver;
 
 	protected:
 		unsigned long lastUpdateTime_ms;
 
 	private:
+
 		/*
 		* These class methods are only for use by StrawberryString itself
 		*/
@@ -134,7 +141,8 @@ namespace SweetMaker
 		IEventHandler * userEventHandlerObject;
 
 		void handleEvent(uint16_t eventId, uint8_t sourceInst, uint16_t eventInfo);
-		int resetEepromData();
+		void storeOffsetRotation(RotationQuaternion_16384* rotQuat);
+
 	};
 }
 
